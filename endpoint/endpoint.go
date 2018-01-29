@@ -6,6 +6,7 @@ import (
 	"github.com/v2pro/plz/countlog"
 	"github.com/v2pro/plz.service/http"
 	"github.com/esdb/lstore"
+	"github.com/v2pro/plz"
 )
 
 type Config struct {
@@ -28,7 +29,8 @@ func StartHttpServer(store *lstore.Store) {
 	}
 	endpoint := &dstoreEndpoint{store}
 	server := http.NewServer()
-	server.Handle("/append", AppendEntryFunc(endpoint.appendEntry))
+	server.Handle("/append", AppendFunc(endpoint.append))
+	server.Handle("/search", SearchFunc(endpoint.search))
 	server.Start(cfg.ListenAddr)
 }
 
@@ -36,20 +38,42 @@ type dstoreEndpoint struct {
 	store *lstore.Store
 }
 
-type AppendEntryRequest struct {
+type AppendRequest struct {
 	*lstore.Entry
 }
 
-type AppendEntryResponse struct {
+type AppendResponse struct {
 	Offset lstore.Offset
 }
 
-type AppendEntryFunc func(ctx *countlog.Context, req *AppendEntryRequest) (*AppendEntryResponse, error)
+type AppendFunc func(ctx *countlog.Context, req *AppendRequest) (*AppendResponse, error)
 
-func (endpoint *dstoreEndpoint) appendEntry(ctx *countlog.Context, req *AppendEntryRequest) (*AppendEntryResponse, error) {
+func (endpoint *dstoreEndpoint) append(ctx *countlog.Context, req *AppendRequest) (*AppendResponse, error) {
 	offset, err := endpoint.store.Append(ctx, req.Entry)
 	if err != nil {
 		return nil, err
 	}
-	return &AppendEntryResponse{offset}, nil
+	return &AppendResponse{offset}, nil
+}
+
+type SearchRequest struct {
+	Query string
+}
+
+type SearchResponse struct {
+	Rows []lstore.Row
+}
+
+type SearchFunc func(ctx *countlog.Context, req *SearchRequest) (*SearchResponse, error)
+
+func (endpoint *dstoreEndpoint) search(ctx *countlog.Context, req *SearchRequest) (*SearchResponse, error) {
+	reader, err := endpoint.store.NewReader(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer plz.Close(reader)
+	reader.SearchForward(ctx, &lstore.SearchRequest{
+
+	})
+	return nil, nil
 }

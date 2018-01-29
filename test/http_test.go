@@ -25,7 +25,7 @@ func testStore(cfg *lstore.Config) *lstore.Store {
 	return store
 }
 
-func Test_http(t *testing.T) {
+func Test_append(t *testing.T) {
 	should := require.New(t)
 	counselor.SetObject("dstore", "http",
 		"DstoreHttpConfig", []byte(`{
@@ -34,14 +34,41 @@ func Test_http(t *testing.T) {
 	store := testStore(&lstore.Config{})
 	go endpoint.StartHttpServer(store)
 	time.Sleep(time.Millisecond * 100)
-	var appendEntry endpoint.AppendEntryFunc
+	var appendEntry endpoint.AppendFunc
 	client := http.NewClient()
 	client.Handle("POST", "http://127.0.0.1:9776/append", &appendEntry)
-	resp, err := appendEntry(ctx, &endpoint.AppendEntryRequest{
+	resp, err := appendEntry(ctx, &endpoint.AppendRequest{
 		Entry: &lstore.Entry{
 			IntValues: []int64{1},
 		},
 	})
 	should.NoError(err)
 	should.Equal(lstore.Offset(1), resp.Offset)
+}
+
+
+func Test_search(t *testing.T) {
+	should := require.New(t)
+	counselor.SetObject("dstore", "http",
+		"DstoreHttpConfig", []byte(`{
+		"ListenAddr": "127.0.0.1:9776"
+	}`))
+	store := testStore(&lstore.Config{})
+	go endpoint.StartHttpServer(store)
+	time.Sleep(time.Millisecond * 100)
+	var appendEntry endpoint.AppendFunc
+	client := http.NewClient()
+	client.Handle("POST", "http://127.0.0.1:9776/append", &appendEntry)
+	appendEntry(ctx, &endpoint.AppendRequest{
+		Entry: &lstore.Entry{
+			IntValues: []int64{1},
+		},
+	})
+	var search endpoint.SearchFunc
+	client.Handle("POST", "http://127.0.0.1:9776/search", &search)
+	resp, err := search(ctx, &endpoint.SearchRequest{
+		Query: "SELECT * FROM store WHERE field=1",
+	})
+	should.NoError(err)
+	should.Equal(1, len(resp.Rows))
 }
